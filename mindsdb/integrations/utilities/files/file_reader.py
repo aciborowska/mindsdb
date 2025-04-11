@@ -9,13 +9,15 @@ from typing import List
 import filetype
 import pandas as pd
 from charset_normalizer import from_bytes
-
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+import fitz  # pymupdf
+import pymupdf4llm
 from mindsdb.utilities import log
 
 logger = log.getLogger(__name__)
 
-DEFAULT_CHUNK_SIZE = 500
-DEFAULT_CHUNK_OVERLAP = 250
+DEFAULT_CHUNK_SIZE = 2000
+DEFAULT_CHUNK_OVERLAP = 100
 
 
 class FileDetectError(Exception):
@@ -312,7 +314,7 @@ class FileReader(FormatDetector):
         metadata = {"source_file": name, "file_format": "txt"}
         documents = [Document(page_content=text, metadata=metadata)]
 
-        text_splitter = RecursiveCharacterTextSplitter(
+        text_splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
             chunk_size=DEFAULT_CHUNK_SIZE, chunk_overlap=DEFAULT_CHUNK_OVERLAP
         )
 
@@ -330,11 +332,19 @@ class FileReader(FormatDetector):
         import fitz  # pymupdf
         from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-        with fitz.open(stream=file_obj.read()) as pdf:  # open pdf
-            text = chr(12).join([page.get_text() for page in pdf])
+        import tempfile
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=True) as tmp_file:
+            tmp_file.write(file_obj.read())
+            tmp_file.flush()
 
-        text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=DEFAULT_CHUNK_SIZE, chunk_overlap=DEFAULT_CHUNK_OVERLAP
+            text = pymupdf4llm.to_markdown(tmp_file.name)
+
+        print("hello world")
+        logger.info("hello wordl")
+        text_splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
+            model_name="gpt-4",
+            chunk_size=DEFAULT_CHUNK_SIZE,
+            chunk_overlap=DEFAULT_CHUNK_OVERLAP,
         )
 
         split_text = text_splitter.split_text(text)
